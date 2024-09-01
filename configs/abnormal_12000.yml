@@ -1,0 +1,93 @@
+processing:
+
+
+
+input_size: 24000
+n_channels: 19
+
+dataset:
+  name: tub_abnormal
+  train_edf_dir: './data/edf/train/'
+  train_label_dir: './data/train_24000_label.csv'
+  train_data_dir: './data/origin_csv/train_24000/'
+  
+  val_edf_dir: './data/edf/eval/'
+  val_label_dir: './data/eval_24000_label.csv'
+  val_data_dir: './data/origin_csv/eval_24000/'
+  
+  classes:
+    normal: 0
+    abnormal: 1
+#   root: './data'
+  num_workers: 16
+#   transform: basic
+  shuffle: True
+  
+model:
+  d_model: 256
+  n_head: 4
+  n_layer: 6
+  
+
+criterion:
+  name: ce
+
+optimizer:
+  name: adamw
+  init_lr: 0.001
+  weight_decay: 0.0
+
+scheduler:
+  name: cosine
+  lr_gamma: 0.99
+  lr_min: 0
+
+warmup: 0
+
+train:
+  experiment: mnist_cnn_train
+  warmup_steps: 10000
+  n_epochs: 70
+  batch_size: 128
+  use_cuda: 1
+  gpu_id: 0
+  deterministic: 1
+  random_state: 42
+  log_interval: 200
+
+tensorboard:
+  runs_dir: './runs/'
+
+quantize:
+  weight_bit: 32
+  input_bit: 32
+
+noise:
+  phase_noise_std: 0
+  gamma_noise_std: 0
+  crosstalk_factor: 0
+  random_state: 42
+
+checkpoint:
+  save_best_model_k: 3
+  checkpoint_dir: "./weights/"
+  weights:
+  model_comment: ""
+  resume: 0
+  restore_checkpoint: ""
+
+# model:
+#   name: "MZI_CLASS_CNN"
+#   mode: "usv"
+#   kernel_list: [64, 64]
+#   kernel_size_list: [3, 3]
+#   hidden_list: []
+#   block_list: [8, 8, 8]
+#   stride_list: [1, 1]
+#   padding_list: [1, 1]
+#   dilation_list: [1, 1]
+#   pool_out_size: 5
+#   decompose_alg: reck
+
+debug:
+  verbose: 1
