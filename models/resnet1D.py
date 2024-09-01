@@ -1,6 +1,7 @@
 
 from functools import partial
 from typing import Any, Callable, List, Optional, Type, Union
+from math import ceil
 
 import torch
 import torch.nn as nn
@@ -121,27 +122,27 @@ class BasicBlock(nn.Module):
         self,
         inplanes: int,
         planes: int,
+        len_feature: int,
         stride: int = 1,
         downsample: Optional[nn.Module] = None,
         groups: int = 1,
         base_width: int = 64,
         dilation: int = 1,
-#         data_len = 6000,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
         if norm_layer is None:
-            norm_layer = nn.BatchNorm1d
+            norm_layer = nn.LayerNorm
 #         if groups != 1 or base_width != 64:
 #             raise ValueError("BasicBlock only supports groups=1 and base_width=64")
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
+        self.ln1 = norm_layer(len_feature)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
+        self.ln2 = norm_layer(len_feature)
         self.downsample = downsample
         self.stride = stride
 
@@ -150,12 +151,12 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         logger.debug(f"data shape after sub-conv1-3x3: {out.shape}")  # Log as debug
-        out = self.bn1(out)
+        out = self.ln1(out)
         out = self.relu(out)
 
         out = self.conv2(out)
         logger.debug(f"data shape after sub-conv2-3x3: {out.shape}")  # Log as debug
-        out = self.bn2(out)
+        out = self.ln2(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -200,7 +201,7 @@ class Bottleneck(nn.Module):
 # replace width to inplanes    -- yossi
         self.conv1 = conv1x1(inplanes, inplanes)
         
-        self.bn1 = norm_layer(inplanes)
+        self.ln1 = norm_layer(inplanes)
 #         self.conv2 = conv3x3(width, width, stride, groups, dilation)
         self.conv2 = conv3x3(inplanes, inplanes, stride, groups, dilation)
         self.bn2 = norm_layer(inplanes)
@@ -251,17 +252,19 @@ class ResNet(nn.Module):
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
         n_channels: int = 19,
-        d_model: int = 256
+        d_model: int = 256,
+        len_feature: int = 12000     # --yossi
     ) -> None:
         super().__init__()
 #         _log_api_usage_once(self)
         if norm_layer is None:
-            norm_layer = nn.BatchNorm1d
+            norm_layer = nn.LayerNorm
         self._norm_layer = norm_layer
         self.n_channels = n_channels
         self.inplanes = self.n_channels * 8     #   --yossi
         self.dilation = 1
         self.d_model = d_model
+        self.len_feature = len_feature
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
@@ -274,14 +277,16 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
         self.conv1 = nn.Conv1d(self.n_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)    #  n_channels*8 = 152  --yossi
-        self.bn1 = norm_layer(self.inplanes)
+        
+        self.ln1 = norm_layer(ceil(self.len_feature/2))    #   --yossi
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, self.inplanes, layers[0])   #   channels*8 = 152  --yossi
-        self.layer2 = self._make_layer(block, self.inplanes*2, layers[1], stride=2, dilate=replace_stride_with_dilation[0])   # channels*16 = 304 --yossi
-        self.layer3 = self._make_layer(block, self.inplanes*2, layers[2], stride=2, dilate=replace_stride_with_dilation[1])    # channels*32 = 608  --yossi
-        self.layer4 = self._make_layer(block, self.inplanes*2, layers[3], stride=2, dilate=replace_stride_with_dilation[2])   # channels*64 = 1216    --yossi
-        self.avgpool = nn.AdaptiveAvgPool2d((self.n_channels, self.d_model))    # need to modify
+        self.maxpool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)    
+        #   len_feature = len / 4   1500,   --yossi
+        self.layer1 = self._make_layer(block, self.inplanes, layers[0], ceil(self.len_feature/4))   #   channels*8 = 152, len_feature = len / 4   1500,   --yossi --yossi
+        self.layer2 = self._make_layer(block, self.inplanes*2, layers[1], ceil(self.len_feature/8), stride=2, dilate=replace_stride_with_dilation[0])   # channels*16 = 304, len_feature = len / 8   750 --yossi
+        self.layer3 = self._make_layer(block, self.inplanes*2, layers[2], ceil(self.len_feature/16), stride=2, dilate=replace_stride_with_dilation[1])    # channels*32 = 608, len_feature = len / 16   375  --yossi
+        self.layer4 = self._make_layer(block, self.inplanes*2, layers[3], ceil(self.len_feature/32), stride=2, dilate=replace_stride_with_dilation[2])   # channels*64 = 1216, len_feature = len / 32, 188    --yossi
+        self.avgpool = nn.AdaptiveAvgPool2d((self.n_channels, self.d_model))    # need to modify  --zys
         self.dropout2 = nn.Dropout(0.2)
         self.dropout5 = nn.Dropout(0.5)    # --zys
         self.fc = nn.Linear(self.n_channels * self.d_model * block.expansion, num_classes)
@@ -289,7 +294,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm1d, nn.GroupNorm)):
+            elif isinstance(m, (nn.BatchNorm1d, nn.LayerNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
@@ -308,6 +313,7 @@ class ResNet(nn.Module):
         block: Type[Union[BasicBlock, Bottleneck]],
         planes: int,
         blocks: int,
+        len_feature: int,
         stride: int = 1,
         dilate: bool = False,
     ) -> nn.Sequential:
@@ -324,13 +330,13 @@ class ResNet(nn.Module):
 #             )
             downsample = nn.Sequential(          #  --yossi
                 conv1x1_downsample(self.inplanes, planes, stride, padding=0),
-                norm_layer(planes * block.expansion),
+                norm_layer(len_feature),
             )
 
         layers = []
         layers.append(
             block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
+                self.inplanes, planes, len_feature, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
             )
         )
         self.inplanes = planes * block.expansion
@@ -339,10 +345,11 @@ class ResNet(nn.Module):
                 block(
                     self.inplanes,
                     planes,
+                    len_feature,
                     groups=self.groups,
                     base_width=self.base_width,
                     dilation=self.dilation,
-                    norm_layer=norm_layer,
+                    norm_layer=norm_layer
                 )
             )
 
@@ -353,7 +360,7 @@ class ResNet(nn.Module):
         logger.debug(f"data shape is: {x.shape}")  # Log as debug
         x = self.conv1(x)
         logger.debug(f"data shape after conv1: {x.shape}")  # Log as debug
-        x = self.bn1(x)
+        x = self.ln1(x)
         logger.debug(f"data shape after bn1: {x.shape}")  # Log as debug
         x = self.relu(x)
         x = self.maxpool(x)
