@@ -2,7 +2,7 @@ processing:
 
 
 
-input_size: 24000
+input_size: 12000
 n_channels: 19
 
 dataset:
