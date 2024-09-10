@@ -1,19 +1,20 @@
 processing:
+  frequency: 100
 
 
 
-input_size: 24000
+input_size: 12000
 n_channels: 19
 
 dataset:
   name: tub_abnormal
-  train_edf_dir: './data/edf/train/'
-  train_label_dir: './data/train_24000_label.csv'
-  train_data_dir: './data/origin_csv/train_24000/'
+  train_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/train/'
+  train_label_dir: '../data/train_12000_label.csv'
+  train_data_dir: '../data/seg_csv/train_12000/'
   
-  val_edf_dir: './data/edf/eval/'
-  val_label_dir: './data/eval_24000_label.csv'
-  val_data_dir: './data/origin_csv/eval_24000/'
+  val_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/eval/'
+  val_label_dir: '../data/eval_12000_label.csv'
+  val_data_dir: '../data/seg_csv/eval_12000/'
   
   classes:
     normal: 0
