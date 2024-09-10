@@ -258,7 +258,7 @@ if __name__ == "__main__":
     parser.add_argument("config_file", metavar="FILE", help="config file")
     # parser.add_argument('--run-dir', metavar='DIR', help='run directory')
     # parser.add_argument('--pdb', action='store_true', help='pdb')
-    args = parser.parse_args(args=['configs/abnormal_24000.yml'])
+    args = parser.parse_args(args=['configs/abnormal_12000.yml'])
     # args, opts = parser.parse_known_args()
     # f = 'configs/eeg_pt.yml'
     with open(args.config_file, 'r') as file:
