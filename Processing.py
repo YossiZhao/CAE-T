@@ -71,7 +71,7 @@ def data_clip(data_path:Path, result_path:Path, data_len:int, down_sample:int): 
             # Extract the segment
             segment = pd_frame.iloc[start:end, 1:]
     #         logger.info(segment.shape, file_name)
-
+            # normalization
             scaler = Normalizer()
             segment = scaler.fit_transform(segment.T).T
 #             segment = segment.T + pe
