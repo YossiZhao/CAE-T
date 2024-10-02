@@ -36,7 +36,7 @@ from models.transformer_encoder import transformer_classifier
 # ### Dataset
 
 class customDataset(Dataset):
-    def __init__(self, data_dir:str, label_dir:str, label_dict:dict, transform=None):
+    def __init__(self, data_dir:str, label_dir:str, label_dict:dict, mean: list, std: list, transform=None):
 #         self.annotations = pd.read_csv(label_dir)
         self.data_dir = data_dir   # './data/origin_csv/train'
         self.label_dir = label_dir
@@ -44,6 +44,8 @@ class customDataset(Dataset):
         self.files = os.listdir(self.data_dir)
         self.annotations = pd.read_csv(self.label_dir)
         self.label_dict = label_dict
+        self.mean = torch.tensor(mean)
+        self.std = torch.tensor(std)
         
     def __len__(self):
         return len(self.files)
@@ -51,15 +53,15 @@ class customDataset(Dataset):
     def __getitem__(self, index):
         data_path = os.path.join(self.data_dir, self.files[index])
         data = pd.read_csv(data_path)
-        data = torch.tensor(data.values, dtype=torch.float32)
+        data = torch.tensor(data.values, dtype=torch.float32).to('cuda')
         file_name = self.files[index]
         
-        label = torch.tensor(int(self.label_dict[self.annotations.iloc[index,1]]))
+        label = torch.tensor(int(self.label_dict[self.annotations.iloc[index,1]])).to('cuda')
         
         if self.transform:
-            data = self.transform(data)
+            data = self.transform(data.t())
             
-        return (data.t(), label, file_name)
+        return (data, label, file_name)
 
 
 
@@ -75,6 +77,11 @@ class model(nn.Module):
 #         z = self.transformer_encoder(z)
         return z
 
+# transform signal
+def transform(Tensor: data, Tensor:mean, Tensor:std):
+    normalized_data = (data - mean) / std
+    return normalized_data
+    
 
 ### Learning rate update policy
 def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
@@ -110,7 +117,7 @@ def evaluate_model(model, eval_loader, criterion):
     with torch.no_grad():  # Disable gradient calculations
         for batch_index, (data,target,_) in enumerate(eval_loader, 0):
 #         for data, labels in val_loader:
-            data, target = data.to('cuda'), target.to('cuda')
+#             data, target = data.to('cuda'), target.to('cuda')
             outputs = model(data)
             loss = criterion(outputs, target)
             val_loss += loss.item()
@@ -171,7 +178,7 @@ def train(Configs:dict):
                 if warmup_step < warmup_steps:
                     optimizer.zero_grad()
             #     for batch_index, data in enumerate(train_loader, 0):
-                    data, target = data.to('cuda'), target.to('cuda')
+#                     data, target = data.to('cuda'), target.to('cuda')
                     y = classifier(data)
             #         logger.debug(f"y size:{y.shape}, tatget size{target.shape}")
                     warmup_loss = criterion(y, target)
