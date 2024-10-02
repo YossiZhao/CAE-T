@@ -29,6 +29,7 @@ from collections import OrderedDict
 # from sklearn.model_selection import train_test_split
 from configs.config import configs
 
+from models.pe import PositionalEncoding
 from models.resnet1D import *
 from models.transformer_encoder import transformer_classifier
 
@@ -59,20 +60,34 @@ class customDataset(Dataset):
         if self.transform:
             data = self.transform(data)
             
-        return (data.t(), label, file_name)
+        return (data, label, file_name)
 
 
 
 ### Define classifier
+# class model(nn.Module):
+#     def __init__(self, input_size: int, n_channels: int, model_hyp: dict, classes: int):
+#         super(model, self).__init__()
+#         self.ae = resnet18(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
+# #         self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
+
+#     def forward(self, x):
+#         z = self.ae(x)
+# #         z = self.transformer_encoder(z)
+#         return z
+
 class model(nn.Module):
     def __init__(self, input_size: int, n_channels: int, model_hyp: dict, classes: int):
         super(model, self).__init__()
+        self.pe = PositionalEncoding(d_model=n_channels, max_len=input_size)
         self.ae = resnet18(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
-#         self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
+        self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
 
     def forward(self, x):
-        z = self.ae(x)
-#         z = self.transformer_encoder(z)
+        z = self.pe(x)
+        z = z.transpose(-1,-2)
+        z = self.ae(z)
+        z = self.transformer_encoder(z)
         return z
 
 
@@ -248,7 +263,7 @@ def train(Configs:dict):
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)  # Use the current module's name
-    logging.basicConfig(filename=f'./logs/{datetime.now().strftime("%y%m%d%H%M")}_resnet18.log', level=logging.DEBUG)
+    logging.basicConfig(filename=f'../logs/{datetime.now().strftime("%y%m%d%H%M")}_resnet18.log', level=logging.INFO)
 #     logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler()
     # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')

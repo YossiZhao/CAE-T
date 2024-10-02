@@ -9,11 +9,11 @@ n_channels: 19
 dataset:
   name: tub_abnormal
   train_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/train/'
-  train_label_dir: '../data/train_12000_label.csv'
+  train_label_dir: '../data/train_label_12000.csv'
   train_data_dir: '../data/seg_csv/train_12000/'
   
   val_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/eval/'
-  val_label_dir: '../data/eval_12000_label.csv'
+  val_label_dir: '../data/eval_label_12000.csv'
   val_data_dir: '../data/seg_csv/eval_12000/'
   
   classes:
@@ -27,7 +27,7 @@ dataset:
 model:
   d_model: 256
   n_head: 4
-  n_layer: 6
+  n_layer: 4
   
 
 criterion:
@@ -35,7 +35,7 @@ criterion:
 
 optimizer:
   name: adamw
-  init_lr: 0.001
+  init_lr: 0.00001
   weight_decay: 0.0
 
 scheduler:
@@ -43,13 +43,13 @@ scheduler:
   lr_gamma: 0.99
   lr_min: 0
 
-warmup: 0
+warmup: 1
 
 train:
   experiment: mnist_cnn_train
   warmup_steps: 10000
   n_epochs: 70
-  batch_size: 128
+  batch_size: 32
   use_cuda: 1
   gpu_id: 0
   deterministic: 1
@@ -57,7 +57,7 @@ train:
   log_interval: 200
 
 tensorboard:
-  runs_dir: './runs/'
+  runs_dir: '../runs/'
 
 quantize:
   weight_bit: 32
@@ -71,7 +71,7 @@ noise:
 
 checkpoint:
   save_best_model_k: 3
-  checkpoint_dir: "./weights/"
+  checkpoint_dir: "../weights/"
   weights:
   model_comment: ""
   resume: 0

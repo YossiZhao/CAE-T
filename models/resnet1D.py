@@ -293,7 +293,7 @@ class ResNet(nn.Module):
         self.avgpool_2 = nn.AdaptiveAvgPool2d((self.n_channels, self.d_model))    # need to modify  --zys
         self.dropout2 = nn.Dropout(0.2)
         self.dropout5 = nn.Dropout(0.5)    # --zys
-        self.fc = nn.Linear(self.n_channels * self.d_model * block.expansion, num_classes)
+#         self.fc = nn.Linear(self.n_channels * self.d_model * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
@@ -393,9 +393,9 @@ class ResNet(nn.Module):
         logger.debug(f"data shape after avgpool: {x.shape}")
 #         x = self.dropout5(x)
         
-        x = torch.flatten(x, 1)
-        logger.debug(f"data shape after flatten: {x.shape}")
-        x = self.fc(x)
+#         x = torch.flatten(x, 1)
+#         logger.debug(f"data shape after flatten: {x.shape}")
+#         x = self.fc(x)
 
         return x
 

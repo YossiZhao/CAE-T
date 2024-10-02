@@ -39,7 +39,7 @@ def data_clip(data_path:Path, result_path:Path, data_len:int, down_sample:int): 
     
     
     for file_path in data_path.glob('**/*.edf'):
-        sub_label = str(file_path.parts[3])
+        sub_label = str(file_path.parts[-3])
         file_name = str(file_path.name).split('.')[0]
     #     print(sub_label, file_path, file_name)
         raw = mne.io.read_raw_edf(file_path)
