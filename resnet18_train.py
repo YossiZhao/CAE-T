@@ -34,6 +34,12 @@ from models.resnet1D import *
 from models.transformer_encoder import transformer_classifier
 
 
+
+# Transform signal
+def transform(data:Tensor, mean:Tensor, std:Tensor):
+    normalized_data = (data - mean) / std
+    return normalized_data
+
 # ### Dataset
 
 class customDataset(Dataset):
@@ -54,13 +60,13 @@ class customDataset(Dataset):
     def __getitem__(self, index):
         data_path = os.path.join(self.data_dir, self.files[index])
         data = pd.read_csv(data_path)
-        data = torch.tensor(data.values, dtype=torch.float32).to('cuda')
+        data = torch.tensor(data.values, dtype=torch.float32)
         file_name = self.files[index]
         
-        label = torch.tensor(int(self.label_dict[self.annotations.iloc[index,1]])).to('cuda')
+        label = torch.tensor(int(self.label_dict[self.annotations.iloc[index,1]]))
         
         if self.transform:
-            data = self.transform(data.t())
+            data = self.transform(data, self.mean, self.std)
             
         return (data, label, file_name)
 
@@ -81,21 +87,42 @@ class customDataset(Dataset):
 class model(nn.Module):
     def __init__(self, input_size: int, n_channels: int, model_hyp: dict, classes: int):
         super(model, self).__init__()
-        self.pe = PositionalEncoding(d_model=n_channels, max_len=input_size)
         self.ae = resnet18(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
         self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
+        
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        r"""Initiate parameters in the model."""
+        
+        for p in self.parameters():
+            if p.dim() > 1:
+#                 logger.debug(p.shape)
+                nn.init.xavier_uniform_(p)
+                    
+        for m in self.modules():
+#             print(m)
+            if isinstance(m, nn.Conv1d):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        print('Complete initiate parameters')
 
     def forward(self, x):
-        z = self.pe(x)
-        z = z.transpose(-1,-2)
+#         z = self.pe(x)
+        z = x.transpose(-1,-2)
         z = self.ae(z)
-        z = self.transformer_encoder(z)
+#         z = self.transformer_encoder(z)
         return z
 
-# transform signal
-def transform(Tensor: data, Tensor:mean, Tensor:std):
-    normalized_data = (data - mean) / std
-    return normalized_data
     
 
 ### Learning rate update policy
@@ -132,8 +159,9 @@ def evaluate_model(model, eval_loader, criterion):
     with torch.no_grad():  # Disable gradient calculations
         for batch_index, (data,target,_) in enumerate(eval_loader, 0):
 #         for data, labels in val_loader:
-#             data, target = data.to('cuda'), target.to('cuda')
-            outputs = model(data)
+            data, target = data.to('cuda'), target.to('cuda')
+            input_pe = input_layer(data)
+            outputs = model(input_pe)
             loss = criterion(outputs, target)
             val_loss += loss.item()
 #             outputs = model(data)  # Forward pass to get logits
@@ -157,12 +185,20 @@ def train(Configs:dict):
     val_label_dir = Configs['dataset']['val_label_dir']
 
     label_dict = Configs['dataset']['classes']
+    
+    mean = Configs['dataset']['mean']
+    std = Configs['dataset']['std']
+    
     train_dataset = customDataset(data_dir=train_data_dir,
                                   label_dir=train_label_dir,
-                                  label_dict=label_dict)
+                                  label_dict=label_dict,
+                                 mean=mean, std=std,
+                                 transform=transform)
     val_dataset = customDataset(data_dir=val_data_dir,
                                 label_dir=val_label_dir,
-                                label_dict=label_dict)
+                                label_dict=label_dict,
+                               mean=mean, std=std,
+                               transform=transform)
     
     train_loader = DataLoader(dataset=train_dataset, batch_size=Configs['train']['batch_size'],
                               shuffle=Configs['dataset']['shuffle'], 
@@ -170,11 +206,19 @@ def train(Configs:dict):
 
     eval_loader = DataLoader(dataset=val_dataset, num_workers=Configs['dataset']['num_workers'], 
                              shuffle=Configs['dataset']['shuffle'], pin_memory=True)
+    
+
+    input_layer = nn.Sequential(
+#         nn.Embedding(num_embeddings=10000, embedding_dim=512),
+#         PositionalEncoding(d_model=512, dropout=0.1, max_len=5000)
+        PositionalEncoding(d_model=Configs['n_channels'], max_len=Configs['input_size'])
+    ).to('cuda')
 
     classifier = model(input_size=Configs['input_size'],
                                         n_channels = Configs['n_channels'],
                                         model_hyp=Configs['model'],
                                         classes=len(Configs['dataset']['classes'])).to('cuda')
+    
     optimizer = torch.optim.Adam(classifier.parameters(),lr=Configs['optimizer']['init_lr'], weight_decay=Configs['optimizer']['weight_decay'])
     criterion = nn.CrossEntropyLoss()
     writer = SummaryWriter(Configs['tensorboard']['runs_dir']+
@@ -193,8 +237,9 @@ def train(Configs:dict):
                 if warmup_step < warmup_steps:
                     optimizer.zero_grad()
             #     for batch_index, data in enumerate(train_loader, 0):
-#                     data, target = data.to('cuda'), target.to('cuda')
-                    y = classifier(data)
+                    data, target = data.to('cuda'), target.to('cuda')
+                    input_pe = input_layer(data)
+                    y = classifier(input_pe)
             #         logger.debug(f"y size:{y.shape}, tatget size{target.shape}")
                     warmup_loss = criterion(y, target)
                     

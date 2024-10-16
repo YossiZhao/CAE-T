@@ -57,6 +57,17 @@ __all__ = [
 
 
 # In[4]:
+class MLP(nn.Module):
+    def __init__(self):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(128, 64)  # First fully connected layer
+        self.relu = nn.ReLU()          # Non-linearity
+        self.fc2 = nn.Linear(64, 10)   # Second fully connected layer
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))     # Apply first layer + activation
+        x = self.fc2(x)                # Apply second layer
+        return x
 
 
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv1d:
@@ -566,8 +577,6 @@ def resnet152(*, weights = None, progress: bool = True, **kwargs: Any) -> ResNet
 
     return _resnet(Bottleneck, [3, 8, 36, 3], progress, **kwargs)
 
-
-# In[19]:
 
 
 # model = resnet34()
