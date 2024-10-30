@@ -21,31 +21,6 @@ logger = logging.getLogger(__name__)  # Use the current module's name
 
 
 
-
-# __all__ = [
-#     "ResNet",
-#     "ResNet18_Weights",
-#     "ResNet34_Weights",
-#     "ResNet50_Weights",
-#     "ResNet101_Weights",
-#     "ResNet152_Weights",
-#     "ResNeXt50_32X4D_Weights",
-#     "ResNeXt101_32X8D_Weights",
-#     "ResNeXt101_64X4D_Weights",
-#     "Wide_ResNet50_2_Weights",
-#     "Wide_ResNet101_2_Weights",
-#     "resnet18",
-#     "resnet34",
-#     "resnet50",
-#     "resnet101",
-#     "resnet152",
-#     "resnext50_32x4d",
-#     "resnext101_32x8d",
-#     "resnext101_64x4d",
-#     "wide_resnet50_2",
-#     "wide_resnet101_2",
-# ]
-
 __all__ = [
     "ResNet",
     "resnet18",
@@ -58,24 +33,29 @@ __all__ = [
 
 # In[4]:
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self, in_planes: int, num_classes: int):
         super(MLP, self).__init__()
-        self.fc1 = nn.Linear(128, 64)  # First fully connected layer
+        print(in_planes, num_classes)
+        self.fc1 = nn.Linear(in_planes, in_planes//8)  # First fully connected layer
         self.relu = nn.ReLU()          # Non-linearity
-        self.fc2 = nn.Linear(64, 10)   # Second fully connected layer
+        self.fc2 = nn.Linear(in_planes//8, in_planes//32)   # Second fully connected layer
+        self.fc3 = nn.Linear(in_planes//32, num_classes)
 
     def forward(self, x):
-        x = self.relu(self.fc1(x))     # Apply first layer + activation
+        x = self.fc1(x)
+        x = self.relu(x)
         x = self.fc2(x)                # Apply second layer
+        x = self.relu(x)
+        x = self.fc3(x)
         return x
 
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv1d:
+def conv129(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv1d:
     """3x3 convolution with padding"""
     return nn.Conv1d(
         in_planes,
         out_planes,
-        kernel_size=3,
+        kernel_size=16,
         stride=stride,
         padding=dilation,
         groups=groups,
@@ -149,10 +129,12 @@ class BasicBlock(nn.Module):
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes, stride, groups=groups)
+        self.conv1 = conv129(inplanes, planes, stride, groups=groups)
+        self.avgpool_1 = nn.AdaptiveAvgPool1d(len_feature)
         self.ln1 = norm_layer(len_feature)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes, groups=groups)
+        self.conv2 = conv129(planes, planes, groups=groups)
+        self.avgpool_2 = nn.AdaptiveAvgPool1d(len_feature)
         self.ln2 = norm_layer(len_feature)
         self.downsample = downsample
         self.stride = stride
@@ -162,6 +144,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         logger.debug(f"data shape after sub-conv1-3x3: {out.shape}, groups={self.conv1.groups}")  # Log as debug
+        out = self.avgpool_1(out)
         out = self.ln1(out)
         logger.debug(f"data shape after sub-ln1: {out.shape}")  # Log as debug
         out = self.relu(out)
@@ -169,6 +152,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv2(out)
         logger.debug(f"data shape after sub-conv2-3x3: {out.shape}, groups={self.conv2.groups}")  # Log as debug
+        out = self.avgpool_2(out)
         out = self.ln2(out)
         logger.debug(f"data shape after sub-ln2: {out.shape}")  # Log as debug
 
@@ -291,8 +275,8 @@ class ResNet(nn.Module):
             )
         self.groups = groups   # 19  --yossi
         self.base_width = width_per_group    # 64   --yossi
-        self.conv1 = nn.Conv1d(self.n_channels, self.inplanes, kernel_size=7, groups=self.groups, stride=2, padding=3, bias=False)    #  n_channels*8 = 152  --yossi
-        
+        self.conv1 = nn.Conv1d(self.n_channels, self.inplanes, kernel_size=64, groups=self.groups, stride=2, padding=3, bias=False)    #  n_channels*8 = 152  --yossi
+        self.avgpool1d = nn.AdaptiveAvgPool1d(ceil(self.len_feature/2))
         self.ln1 = norm_layer(ceil(self.len_feature/2))    #   --yossi
         self.relu = nn.ReLU(inplace=True)
         self.avgpool_1 = nn.AvgPool1d(kernel_size=3, stride=2, padding=1)    
@@ -309,7 +293,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm1d, nn.LayerNorm)):
+            elif isinstance(m, nn.LayerNorm):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
@@ -376,6 +360,7 @@ class ResNet(nn.Module):
         logger.debug(f"data shape is: {x.shape}")  # Log as debug
         x = self.conv1(x)
         logger.debug(f"data shape after conv1: {x.shape}")  # Log as debug
+        x = self.avgpool1d(x)
         x = self.ln1(x)
         logger.debug(f"data shape after ln1: {x.shape}")  # Log as debug
         x = self.relu(x)
@@ -398,14 +383,17 @@ class ResNet(nn.Module):
         x = self.layer4(x)
 #         logger.debug(f"data shape after layer4: {x.shape}")
         x = self.dropout2(x)
-        
 
         x = self.avgpool_2(x)
         logger.debug(f"data shape after avgpool: {x.shape}")
-#         x = self.dropout5(x)
         
 #         x = torch.flatten(x, 1)
 #         logger.debug(f"data shape after flatten: {x.shape}")
+        
+#         x = self.mlp(x)
+#         logger.debug(f"data shape after mlp: {x.shape}")
+#         x = self.dropout5(x)
+        
 #         x = self.fc(x)
 
         return x

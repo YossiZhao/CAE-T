@@ -45,7 +45,7 @@ def transform(data:Tensor, mean:Tensor, std:Tensor):
 class customDataset(Dataset):
     def __init__(self, data_dir:str, label_dir:str, label_dict:dict, mean: list, std: list, transform=None):
 #         self.annotations = pd.read_csv(label_dir)
-        self.data_dir = data_dir   # './data/origin_csv/train'
+        self.data_dir = data_dir   # './data/seg_csv/train'
         self.label_dir = label_dir
         self.transform = transform
         self.files = os.listdir(self.data_dir)
@@ -63,7 +63,10 @@ class customDataset(Dataset):
         data = torch.tensor(data.values, dtype=torch.float32)
         file_name = self.files[index]
         
-        label = torch.tensor(int(self.label_dict[self.annotations.iloc[index,1]]))
+#         label = torch.tensor(int(self.label_dict[self.annotations.iloc[index,1]]))
+        label = self.annotations.loc[self.annotations['csv_file'] == file_name, ['label']].to_string(index=False,header=False)
+        label = torch.tensor(int(self.label_dict[label]))
+        
         
         if self.transform:
             data = self.transform(data, self.mean, self.std)
@@ -89,6 +92,13 @@ class model(nn.Module):
         super(model, self).__init__()
         self.ae = resnet18(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
         self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
+        self.mlp = nn.Sequential(
+                    nn.Linear(n_channels*model_hyp['d_model'], n_channels*model_hyp['d_model']//8),
+                    nn.ReLU(),
+                    nn.Linear(n_channels*model_hyp['d_model']//8, n_channels*model_hyp['d_model']//32),
+                    nn.ReLU(),
+                    nn.Linear(n_channels*model_hyp['d_model']//32, classes),
+                )
         
         self.reset_parameters()
         
@@ -120,8 +130,10 @@ class model(nn.Module):
 #         z = self.pe(x)
         z = x.transpose(-1,-2)
         z = self.ae(z)
-#         z = self.transformer_encoder(z)
-        return z
+#         z = torch.flatten(z, 1)
+#         y = self.mlp(z)
+        y = self.transformer_encoder(z)
+        return y
 
     
 
@@ -160,8 +172,8 @@ def evaluate_model(model, eval_loader, criterion):
         for batch_index, (data,target,_) in enumerate(eval_loader, 0):
 #         for data, labels in val_loader:
             data, target = data.to('cuda'), target.to('cuda')
-            input_pe = input_layer(data)
-            outputs = model(input_pe)
+#             input_pe = input_layer(data)
+            outputs = model(data)
             loss = criterion(outputs, target)
             val_loss += loss.item()
 #             outputs = model(data)  # Forward pass to get logits
@@ -208,11 +220,11 @@ def train(Configs:dict):
                              shuffle=Configs['dataset']['shuffle'], pin_memory=True)
     
 
-    input_layer = nn.Sequential(
-#         nn.Embedding(num_embeddings=10000, embedding_dim=512),
-#         PositionalEncoding(d_model=512, dropout=0.1, max_len=5000)
-        PositionalEncoding(d_model=Configs['n_channels'], max_len=Configs['input_size'])
-    ).to('cuda')
+#     input_layer = nn.Sequential(
+# #         nn.Embedding(num_embeddings=10000, embedding_dim=512),
+# #         PositionalEncoding(d_model=512, dropout=0.1, max_len=5000)
+#         PositionalEncoding(d_model=Configs['n_channels'], max_len=Configs['input_size'])
+#     ).to('cuda')
 
     classifier = model(input_size=Configs['input_size'],
                                         n_channels = Configs['n_channels'],
@@ -238,8 +250,8 @@ def train(Configs:dict):
                     optimizer.zero_grad()
             #     for batch_index, data in enumerate(train_loader, 0):
                     data, target = data.to('cuda'), target.to('cuda')
-                    input_pe = input_layer(data)
-                    y = classifier(input_pe)
+#                     input_pe = input_layer(data)
+                    y = classifier(data)
             #         logger.debug(f"y size:{y.shape}, tatget size{target.shape}")
                     warmup_loss = criterion(y, target)
                     
@@ -298,6 +310,8 @@ def train(Configs:dict):
             evaluate_model(classifier, eval_loader, criterion)
 #             writer.add_scalar('Validation Loss', val_loss, global_step=step)
 #             writer.add_scalar('Validation Accuracy', accuracy, global_step=step)
+            torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
+                       f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_epoch_{epoch}.pth')
             
 
         

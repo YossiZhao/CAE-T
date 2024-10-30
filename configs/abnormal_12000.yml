@@ -37,8 +37,8 @@ dataset:
   
 model:
   d_model: 256
-  n_head: 4
-  n_layer: 4
+  n_head: 1
+  n_layer: 1
   
 
 criterion:
@@ -59,7 +59,7 @@ warmup: 0
 train:
   experiment: mnist_cnn_train
   warmup_steps: 10000
-  n_epochs: 70
+  n_epochs: 15
   batch_size: 32
   use_cuda: 1
   gpu_id: 0

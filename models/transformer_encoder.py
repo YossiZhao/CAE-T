@@ -18,7 +18,7 @@ class transformer_classifier(nn.Module):
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=model_hyp['d_model'],
                                                         nhead=model_hyp['n_head'], batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=model_hyp['n_layer'])
-        self.norm = nn.LayerNorm([19,512])
+#         self.norm = nn.LayerNorm([19,512])
         self.flatten = nn.Flatten()
         self.linear = nn.Linear(model_hyp['d_model']*n_channels, classes)
 
