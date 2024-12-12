@@ -1,10 +1,4 @@
-"""
-Description: Modified based on torchpack 0.3.0
-Author: Jiaqi Gu (jqgu@utexas.edu)
-Date: 2021-06-06 01:46:57
-LastEditors: Jiaqi Gu (jqgu@utexas.edu)
-LastEditTime: 2021-06-06 01:46:57
-"""
+
 import hashlib
 import json
 import yaml

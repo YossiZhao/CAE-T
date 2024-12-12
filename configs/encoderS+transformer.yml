@@ -8,13 +8,13 @@ n_channels: 19
 
 dataset:
   name: tub_abnormal
-  train_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/train/'
-  train_label_dir: '../data/train_label_12000.csv'
-  train_data_dir: '../data/seg_csv/train_12000/'
+  train_edf_dir: 'your_path/edf/train/'
+  train_label_dir: 'your_path/label.csv'
+  train_data_dir: 'your_path/'
   
-  val_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/eval/'
-  val_label_dir: '../data/eval_label_12000.csv'
-  val_data_dir: '../data/seg_csv/eval_12000/'
+  val_edf_dir: 'your_path/edf/eval/'
+  val_label_dir: 'your_path/label.csv'
+  val_data_dir: 'your_path/'
   
   mean: [-0.84925363, -0.57970241, -0.84873335, -0.65943293, -0.42680256, -0.55692595,
   -0.68915349, -0.76090215, -0.81714699, -0.4305129, -0.90823503, -0.66544529,
@@ -32,7 +32,6 @@ dataset:
     abnormal: 1
     
   num_workers: 16
-#   transform: basic
   shuffle: True
   
 model:
@@ -47,7 +46,7 @@ criterion:
 
 optimizer:
   name: adam
-  init_lr: 0.0007
+  init_lr: 0.001
   weight_decay: 0.0
 
 scheduler:
@@ -73,7 +72,7 @@ tensorboard:
 
 checkpoint:
   checkpoint_dir: "../weights/"
-  weights: "2411252344_encoderS+transformer_params_epoch_2_bestacc0.791252.pth"
+  weights: "your_path.pth"
   model_comment: ""
   resume: True
   restore_checkpoint: ""
