@@ -1,4 +1,5 @@
 processing:
+  frequency: 100
 
 
 
@@ -7,13 +8,13 @@ n_channels: 19
 
 dataset:
   name: tub_abnormal
-  train_edf_dir: './data/edf/train/'
-  train_label_dir: './data/origin_csv/train_24000_label.csv'
-  train_data_dir: './data/origin_csv/train_24000/'
+  train_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/train/'
+  train_label_dir: '../data/train_label_24000.csv'
+  train_data_dir: '../data/seg_csv/train_24000/'
   
-  val_edf_dir: './data/edf/eval/'
-  val_label_dir: './data/origin_csv/eval_24000_label.csv'
-  val_data_dir: './data/origin_csv/eval_24000/'
+  val_edf_dir: '../../Dataset/tuh_eeg_abnormal/v3.0.1/edf/eval/'
+  val_label_dir: '../data/eval_label_24000.csv'
+  val_data_dir: '../data/seg_csv/eval_24000/'
   
   mean: [-0.84925363, -0.57970241, -0.84873335, -0.65943293, -0.42680256, -0.55692595,
   -0.68915349, -0.76090215, -0.81714699, -0.4305129, -0.90823503, -0.66544529,
@@ -34,9 +35,10 @@ dataset:
   shuffle: True
   
 model:
+  name: encoderM+transformer
   d_model: 256
-  n_head: 4
-  n_layer: 6
+  n_head: 1
+  n_layer: 1
   
 
 criterion:
@@ -44,8 +46,8 @@ criterion:
 
 optimizer:
   name: adam
-  init_lr: 0.001
-  weight_decay: 0.0001
+  init_lr: 0.0015
+  weight_decay: 0.00001
 
 scheduler:
   name: cosine
@@ -56,9 +58,9 @@ warmup: 1
 
 train:
   experiment: abnormal_24000
-  warmup_steps: 10000
-  n_epochs: 150
-  batch_size: 128
+  warmup_steps: 200
+  n_epochs: 20
+  batch_size: 32
   use_cuda: 1
   gpu_id: 0
   deterministic: 1
@@ -66,11 +68,7 @@ train:
   log_interval: 200
 
 tensorboard:
-  runs_dir: './runs/'
-
-quantize:
-  weight_bit: 32
-  input_bit: 32
+  runs_dir: '../runs/'
 
 noise:
   phase_noise_std: 0
@@ -80,24 +78,11 @@ noise:
 
 checkpoint:
   save_best_model_k: 3
-  checkpoint_dir: "./weights/"
+  checkpoint_dir: "../weights/"
   weights:
   model_comment: ""
   resume: 0
   restore_checkpoint: ""
-
-# model:
-#   name: "MZI_CLASS_CNN"
-#   mode: "usv"
-#   kernel_list: [64, 64]
-#   kernel_size_list: [3, 3]
-#   hidden_list: []
-#   block_list: [8, 8, 8]
-#   stride_list: [1, 1]
-#   padding_list: [1, 1]
-#   dilation_list: [1, 1]
-#   pool_out_size: 5
-#   decompose_alg: reck
 
 debug:
   verbose: 1

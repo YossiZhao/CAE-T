@@ -30,12 +30,13 @@ dataset:
   classes:
     normal: 0
     abnormal: 1
-#   root: './data'
+    
   num_workers: 16
 #   transform: basic
   shuffle: True
   
 model:
+  name: encoderS+transformer
   d_model: 256
   n_head: 1
   n_layer: 1
@@ -45,8 +46,8 @@ criterion:
   name: ce
 
 optimizer:
-  name: adamw
-  init_lr: 0.001
+  name: adam
+  init_lr: 0.0007
   weight_decay: 0.0
 
 scheduler:
@@ -57,10 +58,10 @@ scheduler:
 warmup: 0
 
 train:
-  experiment: mnist_cnn_train
-  warmup_steps: 10000
+  experiment: tuh_abnormal
+  warmup_steps: 200
   n_epochs: 15
-  batch_size: 32
+  batch_size: 128
   use_cuda: 1
   gpu_id: 0
   deterministic: 1
@@ -70,36 +71,12 @@ train:
 tensorboard:
   runs_dir: '../runs/'
 
-quantize:
-  weight_bit: 32
-  input_bit: 32
-
-noise:
-  phase_noise_std: 0
-  gamma_noise_std: 0
-  crosstalk_factor: 0
-  random_state: 42
-
 checkpoint:
-  save_best_model_k: 3
   checkpoint_dir: "../weights/"
-  weights:
+  weights: "2411252344_encoderS+transformer_params_epoch_2_bestacc0.791252.pth"
   model_comment: ""
-  resume: 0
+  resume: True
   restore_checkpoint: ""
-
-# model:
-#   name: "MZI_CLASS_CNN"
-#   mode: "usv"
-#   kernel_list: [64, 64]
-#   kernel_size_list: [3, 3]
-#   hidden_list: []
-#   block_list: [8, 8, 8]
-#   stride_list: [1, 1]
-#   padding_list: [1, 1]
-#   dilation_list: [1, 1]
-#   pool_out_size: 5
-#   decompose_alg: reck
 
 debug:
   verbose: 1

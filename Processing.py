@@ -23,7 +23,7 @@ from configs.config import configs
 
 
 
-def data_clip(data_path:Path, result_path:Path, data_len:int, down_sample:int): # data_path = Path('./data/edf/train/'); 
+def data_clip(data_path:Path, result_dir_path:Path, data_len:int, down_sample:int): # data_path = Path('./data/edf/train/'); 
                                                                 # result_path = Path('./data/origin_csv/train/')
     if os.path.exists(result_dir_path):
         shutil.rmtree(result_dir_path)
@@ -56,11 +56,6 @@ def data_clip(data_path:Path, result_path:Path, data_len:int, down_sample:int): 
                                             'EEG O1-REF', 'EEG O2-REF', 'EEG F7-REF', 'EEG F8-REF',
                                             'EEG T3-REF', 'EEG T4-REF', 'EEG T5-REF', 'EEG T6-REF', 
                                             'EEG FZ-REF', 'EEG CZ-REF', 'EEG PZ-REF'])
-    #     channels = ['EEG FP1-REF', 'EEG FP2-REF', 'EEG F3-REF','EEG F4-REF', 
-    #                                         'EEG C3-REF', 'EEG C4-REF', 'EEG P3-REF', 'EEG P4-REF', 
-    #                                         'EEG O1-REF', 'EEG O2-REF', 'EEG F7-REF', 'EEG F8-REF',
-    #                                         'EEG T3-REF', 'EEG T4-REF', 'EEG T5-REF', 'EEG T6-REF', 
-    #                                         'EEG FZ-REF', 'EEG CZ-REF', 'EEG PZ-REF']    
 #         print(pd_frame.shape)
     #     logger.debug(pe)  # Log as info
         while end <= pd_frame.shape[0]:
@@ -72,12 +67,12 @@ def data_clip(data_path:Path, result_path:Path, data_len:int, down_sample:int): 
             segment = pd_frame.iloc[start:end, 1:]
     #         logger.info(segment.shape, file_name)
             # normalization
-            scaler = Normalizer()
-            segment = scaler.fit_transform(segment.T).T
+#             scaler = Normalizer()
+#             segment = scaler.fit_transform(segment.T).T
 #             segment = segment.T + pe
-            np.savetxt(f'{str(result_dir_path)}/{file_name}_{count+1}.csv', segment, header=','.join(channels), 
-                       delimiter=',')
-#             segment.to_csv(f'{str(result_dir_path)}/{file_name}_{count+1}.csv', index=False)
+#             np.savetxt(f'{str(result_dir_path)}/{file_name}_{count+1}.csv', segment, header=','.join(channels), 
+#                        delimiter=',')
+            segment.to_csv(f'{str(result_dir_path)}/{file_name}_{count+1}.csv', index=False)
 
             label.loc[len(label)] = [f'{file_name}_{count+1}.csv', sub_label]
             start += data_len
@@ -99,21 +94,20 @@ if __name__ == "__main__":
     parser.add_argument("config_file", metavar="FILE", help="config file")
     # parser.add_argument('--run-dir', metavar='DIR', help='run directory')
     # parser.add_argument('--pdb', action='store_true', help='pdb')
-    args = parser.parse_args(args=['configs/abnormal_12000.yml'])
+    args = parser.parse_args(args=['configs/encoderS+transformer.yml'])
     # args, opts = parser.parse_known_args()
     # f = 'configs/eeg_pt.yml'
     with open(args.config_file, 'r') as file:
         configs = yaml.safe_load(file)
-        
-    # training dataset
-    edf_data_path = Path(configs['dataset']['train_edf_dir'])  # need to modify
-    result_dir_path = Path(configs['dataset']['train_data_dir'])
+    
     segment_length = configs['input_size']
     down_sampling = configs['processing']['frequency']
-    data_clip(edf_data_path, result_dir_path, segment_length, down_sampling)
+    # training dataset
+    train_edf_data_path = Path(configs['dataset']['train_edf_dir'])  # need to modify
+    train_result_dir_path = Path(configs['dataset']['train_data_dir'])
+    data_clip(train_edf_data_path, train_result_dir_path, segment_length, down_sampling)
 
-    # eval dataset
-    edf_data_path = Path(configs['dataset']['val_edf_dir'])  # need to modify
-    result_dir_path = Path(configs['dataset']['val_data_dir'])
-    segment_length = configs['input_size']
-    data_clip(edf_data_path, result_dir_path, segment_length, down_sampling)
+    # val dataset
+    val_edf_data_path = Path(configs['dataset']['val_edf_dir'])  # need to modify
+    val_result_dir_path = Path(configs['dataset']['val_data_dir'])
+    data_clip(val_edf_data_path, val_result_dir_path, segment_length, down_sampling)

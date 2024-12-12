@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import yaml
 from datetime import datetime
 import logging
+import time
 
 import torch
 from torch import Tensor, nn
@@ -25,14 +26,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from collections import OrderedDict
 
-# from sklearn.preprocessing import StandardScaler
-# from sklearn.model_selection import train_test_split
 from configs.config import configs
 
-from models.pe import PositionalEncoding
-from models.resnet1D import *
-from models.transformer_encoder import transformer_classifier
+# from models.pe import PositionalEncoding
+from models.encoder import res_encoderS, res_encoderM
 
+from models.classifier import transformer_classifier
 
 
 # Transform signal
@@ -44,7 +43,7 @@ def transform(data:Tensor, mean:Tensor, std:Tensor):
 
 class customDataset(Dataset):
     def __init__(self, data_dir:str, label_dir:str, label_dict:dict, mean: list, std: list, transform=None):
-#         self.annotations = pd.read_csv(label_dir)
+        
         self.data_dir = data_dir   # './data/seg_csv/train'
         self.label_dir = label_dir
         self.transform = transform
@@ -74,31 +73,11 @@ class customDataset(Dataset):
         return (data, label, file_name)
 
 
-
-### Define classifier
-# class model(nn.Module):
-#     def __init__(self, input_size: int, n_channels: int, model_hyp: dict, classes: int):
-#         super(model, self).__init__()
-#         self.ae = resnet18(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
-# #         self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
-
-#     def forward(self, x):
-#         z = self.ae(x)
-# #         z = self.transformer_encoder(z)
-#         return z
-
 class model(nn.Module):
     def __init__(self, input_size: int, n_channels: int, model_hyp: dict, classes: int):
         super(model, self).__init__()
-        self.ae = resnet18(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
+        self.ae = res_encoderM(n_channels=n_channels, groups=n_channels, num_classes=classes, d_model=model_hyp['d_model'])
         self.transformer_encoder = transformer_classifier(input_size, n_channels, model_hyp, classes)
-        self.mlp = nn.Sequential(
-                    nn.Linear(n_channels*model_hyp['d_model'], n_channels*model_hyp['d_model']//8),
-                    nn.ReLU(),
-                    nn.Linear(n_channels*model_hyp['d_model']//8, n_channels*model_hyp['d_model']//32),
-                    nn.ReLU(),
-                    nn.Linear(n_channels*model_hyp['d_model']//32, classes),
-                )
         
         self.reset_parameters()
         
@@ -117,7 +96,7 @@ class model(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
         
-            elif isinstance(m, nn.LayerNorm):
+            elif isinstance(m, (nn.LayerNorm, nn.BatchNorm1d)):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
             elif isinstance(m, nn.Linear):
@@ -152,10 +131,12 @@ def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
     if iter % lr_decay_iter or iter > max_iter:
         return optimizer
     lr = init_lr * (1 - iter / max_iter) ** power
-    logger.info(f'lr=: {lr}')
+    
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-    return lr
+    curr_lr_rt = optimizer.param_groups[0]['lr']
+    logger.info(f'lr=: {curr_lr_rt}')
+    return curr_lr_rt
 
 
 def evaluate_model(model, eval_loader, criterion):
@@ -184,8 +165,9 @@ def evaluate_model(model, eval_loader, criterion):
             correct += (predicted == target).sum().item()
             
         val_loss /= len(eval_loader)
-        val_accuracy = 100 * correct / total
-    logger.info(f'Val Loss: {val_loss}, Accuracy:{val_accuracy:.2f}%')
+        val_accuracy = correct / total
+    logger.info(f'Val Loss: {val_loss}, Accuracy:{val_accuracy*100:.2f}%')
+    return val_loss, val_accuracy
     
     
 
@@ -200,6 +182,8 @@ def train(Configs:dict):
     
     mean = Configs['dataset']['mean']
     std = Configs['dataset']['std']
+    
+    model_name = Configs['model']['name']
     
     train_dataset = customDataset(data_dir=train_data_dir,
                                   label_dir=train_label_dir,
@@ -225,18 +209,23 @@ def train(Configs:dict):
 # #         PositionalEncoding(d_model=512, dropout=0.1, max_len=5000)
 #         PositionalEncoding(d_model=Configs['n_channels'], max_len=Configs['input_size'])
 #     ).to('cuda')
-
-    classifier = model(input_size=Configs['input_size'],
+    if Configs['checkpoint']['weights'] is not None:
+        classifier = torch.load(Configs['checkpoint']['checkpoint_dir']+Configs['checkpoint']['weights'])
+#         classifier.load_state_dict(state_dict)
+    else:
+        classifier = model(input_size=Configs['input_size'],
                                         n_channels = Configs['n_channels'],
                                         model_hyp=Configs['model'],
                                         classes=len(Configs['dataset']['classes'])).to('cuda')
     
     optimizer = torch.optim.Adam(classifier.parameters(),lr=Configs['optimizer']['init_lr'], weight_decay=Configs['optimizer']['weight_decay'])
-    criterion = nn.CrossEntropyLoss()
-    writer = SummaryWriter(Configs['tensorboard']['runs_dir']+
-                           f'{datetime.now().strftime("%y%m%d%H%M")}_train_board')    # Initilize tensorflow
-    min_loss = 0.3
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    writer = SummaryWriter(Configs['tensorboard']['runs_dir']+f'{datetime.now().strftime("%y%m%d%H%M")}_{model_name}_train_board')   # Initilize tensorboard
     
+    min_loss = 0.5
+    best_accuracy = 0.75
+    
+    start_time = time.time()
     if Configs['warmup']==1:
         ### Warmup training
         warmup_steps = Configs['train']['warmup_steps']
@@ -252,7 +241,7 @@ def train(Configs:dict):
                     data, target = data.to('cuda'), target.to('cuda')
 #                     input_pe = input_layer(data)
                     y = classifier(data)
-            #         logger.debug(f"y size:{y.shape}, tatget size{target.shape}")
+            #         logger.debug(f"y size:{y.shape}, target size{target.shape}")
                     warmup_loss = criterion(y, target)
                     
                     warmup_loss.backward()
@@ -260,36 +249,35 @@ def train(Configs:dict):
             #         logger.info(f'Epoch: {epoch+1}, Train Loss: {train_loss}')
                     logger.info(f"Warmup Step: {warmup_step}, Warmup Loss: {warmup_loss}")
                     writer.add_scalar('Warmup Loss', warmup_loss, global_step=warmup_step)
+#                     writer.flush()
                     warmup_step += 1
 
                 if warmup_loss < min_loss:  # evaluate model
 #                     logger.info(f'Evaluation: Warmup Loss: {warmup_loss}.')
-                    evaluate_model(classifier, eval_loader, criterion)
+#                     evaluate_model(classifier, eval_loader, criterion)
                     min_loss = warmup_loss
 #                     model_params = {
 #                         'model_state_dict': classifier.state_dict(),
 #                         'val_loss': val_loss,
 #                         'val_accuracy': val_accuracy
 #                     }
-                    torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
-                               f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_best.pth')
+#                     torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
+#                                f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_best.pth')
                         
-        torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
-                   f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_latest.pth')
-        logger.info(f'min_loss: {min_loss}')
-        evaluate_model(classifier, eval_loader, criterion)
+#         torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
+#                    f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_latest.pth')
+#         logger.info(f'min_loss: {min_loss}')
+#         evaluate_model(classifier, eval_loader, criterion)
     
     
     #Start training
     ## load pre-trained model and train
     step = 0
     epochs = Configs['train']['n_epochs']
-    if Configs['checkpoint']['weights'] is not None:
-        state_dict = torch.load(Configs['checkpoint']['checkpoint_dir']+Configs['checkpoint']['weights'])
-        classifier.load_state_dict(state_dict)
+    
     for epoch in range(epochs):
         # Training loop
-        poly_lr_scheduler(optimizer, init_lr=Configs['optimizer']['init_lr'], iter=epoch, max_iter=epochs)
+        curr_lr_rt = poly_lr_scheduler(optimizer, init_lr=Configs['optimizer']['init_lr'], iter=epoch, max_iter=epochs)
         for batch_index, (data,target,_) in enumerate(train_loader, 0):
             optimizer.zero_grad()
     #     for batch_index, data in enumerate(train_loader, 0):
@@ -303,47 +291,76 @@ def train(Configs:dict):
     #         logger.info(f'Epoch: {epoch+1}, Train Loss: {train_loss}')
             logger.info(f"Epoch: {epoch+1}, Step: {step}, training Loss: {train_loss}")
             writer.add_scalar('Training Loss', train_loss, global_step=step)
+#             writer.flush()
             step += 1
 
-        if epoch%5==0:
 #             logger.info(f'Epoch: {epoch+1}, Train Loss: {train_loss}')
-            evaluate_model(classifier, eval_loader, criterion)
-#             writer.add_scalar('Validation Loss', val_loss, global_step=step)
-#             writer.add_scalar('Validation Accuracy', accuracy, global_step=step)
-            torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
-                       f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_epoch_{epoch}.pth')
+        val_loss, val_accuracy = evaluate_model(classifier, eval_loader, criterion)
+        writer.add_scalar('Validation Loss', val_loss, global_step=step)
+        writer.add_scalar('Validation Accuracy', val_accuracy, global_step=step)
+        writer.add_scalar('Validation Accuracy with epoch', val_accuracy, global_step=epoch)
+#         writer.flush()
+        
+        if val_accuracy > best_accuracy:
+            best_accuracy = val_accuracy
+            torch.save(classifier, Configs['checkpoint']['checkpoint_dir']+ f'{datetime.now().strftime("%y%m%d%H%M")}_{model_name}_params_epoch_{epoch+1}_bestacc{best_accuracy:04f}.pth')
+            writer.add_hparams({'lr': curr_lr_rt, 'bsize': Configs['train']['batch_size'], 'input_size': Configs['input_size'], 'epoch': epoch+1},{'val_accuracy': val_accuracy*100, 'train_loss': train_loss, 'val_loss': val_loss})
+#             writer.flush()
+        else:
+            torch.save(classifier, Configs['checkpoint']['checkpoint_dir']+ f'{datetime.now().strftime("%y%m%d%H%M")}_{model_name}_params_epoch_{epoch+1}_acc{val_accuracy:04f}.pth')
+            writer.add_hparams({'lr': curr_lr_rt, 'bsize': Configs['train']['batch_size'], 'input_size': Configs['input_size'], 'epoch': epoch+1},
+                      {'val_accuracy': val_accuracy*100, 'train_loss': train_loss, 'val_loss': val_loss})
+#             writer.flush()
             
 
         
         if train_loss < min_loss:
-            evaluate_model(classifier, eval_loader, criterion)
+            val_loss, val_accuracy = evaluate_model(classifier, eval_loader, criterion)
             min_loss = train_loss
-            torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
-                       f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_best.pth')
+            torch.save(classifier, Configs['checkpoint']['checkpoint_dir']+
+            f'{datetime.now().strftime("%y%m%d%H%M")}_{model_name}_params_minloss__acc{val_accuracy:04f}.pth')
+            writer.add_hparams({'lr': curr_lr_rt, 'bsize': Configs['train']['batch_size'], 'input_size': Configs['input_size'], 'epoch': epoch+1},
+                      {'val_accuracy': val_accuracy*100, 'train_loss': train_loss, 'val_loss': val_loss})
+#             writer.flush()
             
-    torch.save(classifier.state_dict(), Configs['checkpoint']['checkpoint_dir']+
-               f'{datetime.now().strftime("%y%m%d%H%M")}_resnet18_params_latest.pth')
-    evaluate_model(classifier, eval_loader, criterion)
+    end_time = time.time()        
+    val_loss, val_accuracy = evaluate_model(classifier, eval_loader, criterion)
+    torch.save(classifier, Configs['checkpoint']['checkpoint_dir']+ f'{datetime.now().strftime("%y%m%d%H%M")}_{model_name}_params_latest_acc{val_accuracy:04f}.pth')
+    writer.add_hparams({'lr': curr_lr_rt, 'bsize': Configs['train']['batch_size'], 'input_size': Configs['input_size'], 'epoch': epoch+1},
+                      {'val_accuracy': val_accuracy*100, 'train_loss': train_loss, 'val_loss': val_loss})
+    writer.close()
+    
+    # Convert elapsed time to hours, minutes, and seconds
+    elapsed_time = end_time - start_time
+    hours = int(elapsed_time // 3600)
+    minutes = int((elapsed_time % 3600) // 60)
+    seconds = int(elapsed_time % 60)
+    # Format the time as "xh ym zs"
+#     formatted_time = f"{hours}h {minutes}m {seconds}s"
+    logger.info(f"Training time: {hours}h {minutes}m {seconds}s")
             
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_file", metavar="FILE", help="config file")
+    # parser.add_argument('--run-dir', metavar='DIR', help='run directory')
+    # parser.add_argument('--pdb', action='store_true', help='pdb')
+    args = parser.parse_args(args=['configs/encoderM+transformer.yml'])
+    
+    with open(args.config_file, 'r') as file:
+        configs = yaml.safe_load(file)
+    model_name = configs['model']['name']
     logger = logging.getLogger(__name__)  # Use the current module's name
-    logging.basicConfig(filename=f'../logs/{datetime.now().strftime("%y%m%d%H%M")}_resnet18.log', level=logging.INFO)
+    logging.basicConfig(filename=f'../logs/{datetime.now().strftime("%y%m%d%H%M")}_{model_name}.log', level=logging.INFO)
 #     logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler()
     # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # handler.setFormatter(formatter)
     logger.addHandler(handler)
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", metavar="FILE", help="config file")
-    # parser.add_argument('--run-dir', metavar='DIR', help='run directory')
-    # parser.add_argument('--pdb', action='store_true', help='pdb')
-    args = parser.parse_args(args=['configs/abnormal_12000.yml'])
     # args, opts = parser.parse_known_args()
     # f = 'configs/eeg_pt.yml'
-    with open(args.config_file, 'r') as file:
-        configs = yaml.safe_load(file)
+    
 
     # configs['optimizer']['init_lr']
 

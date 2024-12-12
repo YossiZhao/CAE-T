@@ -4,11 +4,6 @@ import logging
 
 logger = logging.getLogger(__name__)  # Use the current module's name
 logger.propagate = True
-# logger.setLevel(logging.DEBUG)
-# handler = logging.StreamHandler()
-# # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# # handler.setFormatter(formatter)
-# logger.addHandler(handler)
 
 ### Define transformer_classifier
 class transformer_classifier(nn.Module):
@@ -17,22 +12,49 @@ class transformer_classifier(nn.Module):
 
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=model_hyp['d_model'],
                                                         nhead=model_hyp['n_head'], batch_first=True)
+
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=model_hyp['n_layer'])
-#         self.norm = nn.LayerNorm([19,512])
         self.flatten = nn.Flatten()
         self.linear = nn.Linear(model_hyp['d_model']*n_channels, classes)
 
     def forward(self, x):
-        # z = self.ae_1(x)
-        # z = self.ae_2(z)
-        # z = self.ae_3(z)
-#         z = z[:, :, :1496] 
-#         logger.debug(f"ae output size: %{z.shape}")
         z = self.transformer_encoder(x)
         logger.debug(f"transformer output size: {z.shape}")
         z = self.flatten(z)
-        # z = self.flatten(z)
         logger.debug(f"flatten output size: {z.shape}")
         y = self.linear(z)
         logger.debug(f"linear output size: {y.shape}")
+        return y
+
+### Define one layer MLP
+class MLP_1l(nn.Module):
+    def __init__(self, n_channels:int, d_model:int, classes:int):
+        super(MLP_1l, self).__init__()
+        self.mlp = nn.Sequential(
+
+                nn.Linear(n_channels*d_model, classes),
+            )
+    
+    def forward(self, x):
+        
+        z = torch.flatten(x, 1)
+        z = self.mlp(z)
+        return y
+
+    
+class MLP_3l(nn.Module):
+    def __init__(self, n_channels:int, d_model:int, classes:int):
+        super(MLP_3l, self).__init__()
+        self.mlp = nn.Sequential(
+                nn.Linear(n_channels*d_model, 2048),
+                nn.ReLU(),
+                nn.Linear(2048, 2048),
+                nn.ReLU(),
+                nn.Linear(2048, classes),
+            )
+    
+    def forward(self, x):
+        
+        z = torch.flatten(x, 1)
+        z = self.mlp(z)
         return y
