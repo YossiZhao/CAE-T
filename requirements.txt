@@ -1,0 +1,12 @@
+pandas
+numpy
+matplotlib
+yaml
+sklearn
+torch==2.0.1
+mne
+logging
+argparse
+fvcore
+math
+tensorboard==2.12.0
