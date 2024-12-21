@@ -35,6 +35,6 @@ The framework’s workflow involves:
 
 Below is a visual representation of the CAE-T workflow:
 
-![Workflow Overview](https://github.com/YossiZhao/CAE-T/Overview.jpeg)
+![Workflow Overview](https://github.com/YossiZhao/CAE-T/images/Overview.jpeg)
 
 ---
