@@ -1,12 +1,12 @@
 # CwA-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection
 
-This is the repository for ["CwA-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection"](https://github.com/YossiZhao/CAE-T). You can checkout the [PDF file](https://github.com/YossiZhao/CwA-T/paper/CwA-T.pdf) of our paper in our GitHub repo.
+This is the repository for ["CwA-T: A Channelwise Autoencoder with Transformer for EEG Abnormality Detection"](https://github.com/YossiZhao/CAE-T). You can checkout the [PDF file](https://github.com/YossiZhao/CwA-T/paper/CwA-T.pdf) of our paper in our GitHub repo.
 
 - If you have used our code or referred to our results in your research, please cite:
 
 ```bibtex
 @misc{zhao2024caetchannelwiseautoencodertransformer,
-      title={CwA-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection}, 
+      title={CwA-T: A Channelwise Autoencoder with Transformer for EEG Abnormality Detection}, 
       author={Youshen Zhao and Keiji Iramina},
       year={2024},
       eprint={2412.14522},
