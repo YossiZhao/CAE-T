@@ -1,12 +1,12 @@
-# CAE-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection
+# CwA-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection
 
-This is the repository for ["CAE-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection"](https://github.com/YossiZhao/CAE-T). You can checkout the [PDF file](https://github.com/YossiZhao/CAE-T/paper/CAE-T.pdf) of our paper in our GitHub repo.
+This is the repository for ["CwA-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection"](https://github.com/YossiZhao/CAE-T). You can checkout the [PDF file](https://github.com/YossiZhao/CwA-T/paper/CwA-T.pdf) of our paper in our GitHub repo.
 
 - If you have used our code or referred to our results in your research, please cite:
 
 ```bibtex
 @misc{zhao2024caetchannelwiseautoencodertransformer,
-      title={CAE-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection}, 
+      title={CwA-T: A Channelwise AutoEncoder with Transformer for EEG Abnormality Detection}, 
       author={Youshen Zhao and Keiji Iramina},
       year={2024},
       eprint={2412.14522},
@@ -19,7 +19,7 @@ This is the repository for ["CAE-T: A Channelwise AutoEncoder with Transformer f
 
 ## Introduction
 
-The proposed **CAE-T framework** is a novel method for EEG abnormality detection, combining a channelwise CNN-based autoencoder with a single-head transformer classifier. This approach effectively addresses challenges in EEG analysis, such as the high dimensionality, complexity of long-term signals, and the need for biologically interpretable features.
+The proposed **CwA-T framework** is a novel method for EEG abnormality detection, combining a channelwise CNN-based autoencoder with a single-head transformer classifier. This approach effectively addresses challenges in EEG analysis, such as the high dimensionality, complexity of long-term signals, and the need for biologically interpretable features.
 
 Key highlights of our study:
 - **Efficient Processing**: Handles long-term EEG signals with reduced computational costs.
@@ -33,7 +33,7 @@ The framework’s workflow involves:
 
 ### Workflow Overview
 
-Below is a visual representation of the CAE-T workflow:
+Below is a visual representation of the CwA-T workflow:
 
 ![Workflow Overview](https://github.com/YossiZhao/CAE-T/blob/v1.2/images/Overview.jpeg)
 
